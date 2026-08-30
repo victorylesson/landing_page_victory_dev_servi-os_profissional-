@@ -2,14 +2,31 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 
 const Lead = require("./models/Lead");
 const app = express();
 
-app.use(cors());
+app.use(helmet());
+app.use(
+  cors({
+    origin: ["https://victory-dev.vercel.app"],
+    methods: ["GET", "POST", "DELETE"],
+  }),
+);
 app.use(express.json());
 
-// ===== CONEXÃO COM MONGODB =====
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+app.use("/leads", limiter);
+
+function exigirAdmin(req, res, next) {
+  if (req.headers["x-admin-key"] !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ erro: "Não autorizado" });
+  }
+  next();
+}
+
 const conectarBanco = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -32,13 +49,11 @@ mongoose.connection.on("disconnected", () => {
   setTimeout(conectarBanco, 5000);
 });
 
-// ===== HEALTH CHECK =====
 app.get("/", (req, res) => {
   const status = mongoose.connection.readyState === 1 ? "ok" : "sem banco";
   res.json({ status, timestamp: new Date().toISOString() });
 });
 
-// ===== ROTAS =====
 app.post("/leads", async (req, res) => {
   try {
     if (mongoose.connection.readyState !== 1) {
@@ -50,25 +65,28 @@ app.post("/leads", async (req, res) => {
     await lead.save();
     res.status(201).json({ mensagem: "Lead salvo com sucesso!" });
   } catch (error) {
-    res.status(400).json({ erro: error.message });
+    console.error(error);
+    res.status(400).json({ erro: "Não foi possível salvar o lead." });
   }
 });
 
-app.get("/leads", async (req, res) => {
+app.get("/leads", exigirAdmin, async (req, res) => {
   try {
     const leads = await Lead.find().sort({ criadoEm: -1 });
     res.json(leads);
   } catch (error) {
-    res.status(500).json({ erro: error.message });
+    console.error(error);
+    res.status(500).json({ erro: "Não foi possível buscar os leads." });
   }
 });
 
-app.delete("/leads/:id", async (req, res) => {
+app.delete("/leads/:id", exigirAdmin, async (req, res) => {
   try {
     await Lead.findByIdAndDelete(req.params.id);
     res.json({ mensagem: "Lead removido." });
   } catch (error) {
-    res.status(500).json({ erro: error.message });
+    console.error(error);
+    res.status(500).json({ erro: "Não foi possível remover o lead." });
   }
 });
 

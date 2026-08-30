@@ -1,9 +1,9 @@
-   node_modules/
-   server/node_modules/
-   .env
-   server/.env
-   .env.local
-   .env.production
-   .env.*
-   *.log
-   npm-debug.log*
+﻿node_modules/
+server/node_modules/
+.env
+server/.env
+.env.local
+.env.production
+.env.*
+*.log
+npm-debug.log*
